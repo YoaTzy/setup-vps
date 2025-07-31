@@ -158,7 +158,6 @@ function install_chromium_docker() {
     mkdir -p ~/chromium && cd ~/chromium
 
     cat <<EOF > docker-compose.yaml
-version: '3'
 services:
   chromium:
     image: lscr.io/linuxserver/chromium:latest
