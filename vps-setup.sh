@@ -169,7 +169,7 @@ services:
       - CUSTOM_HTTPS_PORT=3001
       - TZ=$TIMEZONE
       - LANG=en_US.UTF-8
-      - CHROME_CLI=https://google.com/
+      - CHROME_CLI=https://google.com --allow-insecure-localhost --disable-web-security
       $( [[ "$NO_DECOR" == "y" ]] && echo "- NO_DECOR=true" )
       $( [[ "$NO_FULL" == "y" ]] && echo "- NO_FULL=true" )
     ports:
@@ -183,8 +183,15 @@ EOF
 
     docker compose down || true
     docker compose up -d
-    echo -e "${GREEN}✅ Chromium berjalan di http://$(curl -s ifconfig.me):$HTTP_PORT${NC}"
+
+    PUBLIC_IP=$(curl -s ifconfig.me)
+    echo -e ""
+    echo -e "${GREEN}✅ Chromium berhasil dijalankan.${NC}"
+    echo -e "🌐 HTTP : ${YELLOW}http://$PUBLIC_IP:$HTTP_PORT${NC}"
+    echo -e "🔒 HTTPS: ${YELLOW}https://$PUBLIC_IP:$HTTPS_PORT${NC}"
+    echo -e "${RED}⚠ Jika HTTPS gagal dimuat, coba terima sertifikat self-signed.${NC}"
 }
+
 
 # ========== Menu Utama ==========
 function main_menu() {
