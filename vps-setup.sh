@@ -123,7 +123,7 @@ function install_docker() {
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
     | tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-    apt update && apt install -y docker-ce docker-ce-cli containerd.io
+    apt update && apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
     systemctl enable --now docker
     echo -e "${GREEN}✅ Docker berhasil diinstal.${NC}"
 }
@@ -131,67 +131,142 @@ function install_docker() {
 # ========== Menu 8 ==========
 function install_chromium_docker() {
     if ! command -v docker &>/dev/null; then
-        echo -e "${RED}❌ Docker belum terinstal.${NC}"
+        echo -e "${RED}❌ Docker belum terinstal. Install Docker terlebih dahulu (menu 7).${NC}"
         return
     fi
 
+    echo -e "${BLUE}[INFO] Konfigurasi Chromium Docker Container...${NC}"
+    
     read -p "Username: " USERNAME
+    while [[ -z "$USERNAME" ]]; do
+        echo -e "${RED}Username tidak boleh kosong!${NC}"
+        read -p "Username: " USERNAME
+    done
+    
     read -s -p "Password: " PASSWORD
     echo ""
+    while [[ -z "$PASSWORD" ]]; do
+        echo -e "${RED}Password tidak boleh kosong!${NC}"
+        read -s -p "Password: " PASSWORD
+        echo ""
+    done
+    
     read -p "Timezone (default: Asia/Jakarta): " TIMEZONE
     TIMEZONE=${TIMEZONE:-Asia/Jakarta}
+    
     read -p "HTTP Port (default: 3010): " HTTP_PORT
     HTTP_PORT=${HTTP_PORT:-3010}
+    
     read -p "HTTPS Port (default: 3011): " HTTPS_PORT
     HTTPS_PORT=${HTTPS_PORT:-3011}
-    read -p "No window border (y/n, default: y): " NO_DECOR
-    NO_DECOR=${NO_DECOR:-y}
-    read -p "Disable fullscreen? (y/n, default: n): " NO_FULL
-    NO_FULL=${NO_FULL:-n}
 
-    RAM_MB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
-    if [ $RAM_MB -lt 2097152 ]; then SHM="256mb"
-    elif [ $RAM_MB -lt 4194304 ]; then SHM="512mb"
-    else SHM="1gb"
+    # Validasi port
+    if ! [[ "$HTTP_PORT" =~ ^[0-9]+$ ]] || [ "$HTTP_PORT" -lt 1024 ] || [ "$HTTP_PORT" -gt 65535 ]; then
+        echo -e "${RED}❌ HTTP Port tidak valid (gunakan 1024-65535).${NC}"
+        return
+    fi
+    
+    if ! [[ "$HTTPS_PORT" =~ ^[0-9]+$ ]] || [ "$HTTPS_PORT" -lt 1024 ] || [ "$HTTPS_PORT" -gt 65535 ]; then
+        echo -e "${RED}❌ HTTPS Port tidak valid (gunakan 1024-65535).${NC}"
+        return
     fi
 
-    mkdir -p ~/chromium && cd ~/chromium
+    # Set shm_size berdasarkan RAM
+    RAM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+    if [ $RAM_KB -lt 2097152 ]; then 
+        SHM="256m"
+    elif [ $RAM_KB -lt 4194304 ]; then 
+        SHM="512m"
+    else 
+        SHM="1g"
+    fi
 
-    cat <<EOF > docker-compose.yaml
+    # Buat direktori dan file konfigurasi
+    mkdir -p ~/chromium
+    cd ~/chromium
+
+    # Stop container jika sudah ada
+    docker stop chromium 2>/dev/null || true
+    docker rm chromium 2>/dev/null || true
+
+    echo -e "${BLUE}[INFO] Membuat konfigurasi Docker Compose...${NC}"
+
+    cat <<EOF > docker-compose.yml
+version: '3.8'
 services:
   chromium:
     image: lscr.io/linuxserver/chromium:latest
     container_name: chromium
+    security_opt:
+      - seccomp:unconfined
     environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=$TIMEZONE
       - CUSTOM_USER=$USERNAME
       - PASSWORD=$PASSWORD
-      - CUSTOM_PORT=3000
-      - CUSTOM_HTTPS_PORT=3001
-      - TZ=$TIMEZONE
-      - LANG=en_US.UTF-8
-      - CHROME_CLI=https://google.com --allow-insecure-localhost --disable-web-security
-      $( [[ "$NO_DECOR" == "y" ]] && echo "- NO_DECOR=true" )
-      $( [[ "$NO_FULL" == "y" ]] && echo "- NO_FULL=true" )
+      - SUBFOLDER=/
+      - TITLE=Chromium
+    volumes:
+      - ./config:/config
     ports:
       - "$HTTP_PORT:3000"
       - "$HTTPS_PORT:3001"
-    volumes:
-      - ./config:/config
-    shm_size: "$SHM"
+    shm_size: $SHM
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
 EOF
 
-    docker compose down || true
-    docker compose up -d
+    echo -e "${BLUE}[INFO] Menjalankan Chromium container...${NC}"
+    
+    # Install docker-compose jika belum ada
+    if ! command -v docker-compose &>/dev/null && ! docker compose version &>/dev/null; then
+        echo -e "${BLUE}[INFO] Installing docker-compose...${NC}"
+        curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        chmod +x /usr/local/bin/docker-compose
+    fi
 
-    PUBLIC_IP=$(curl -s ifconfig.me)
-    echo -e ""
-    echo -e "${GREEN}✅ Chromium berhasil dijalankan.${NC}"
-    echo -e "🌐 HTTP : ${YELLOW}http://$PUBLIC_IP:$HTTP_PORT${NC}"
-    echo -e "🔒 HTTPS: ${YELLOW}https://$PUBLIC_IP:$HTTPS_PORT${NC}"
-    echo -e "${RED}⚠ Jika HTTPS gagal dimuat, coba terima sertifikat self-signed.${NC}"
+    # Jalankan container
+    if command -v docker-compose &>/dev/null; then
+        docker-compose up -d
+    else
+        docker compose up -d
+    fi
+
+    # Tunggu container siap
+    echo -e "${BLUE}[INFO] Menunggu container siap...${NC}"
+    sleep 10
+
+    # Cek status container
+    if docker ps | grep -q chromium; then
+        PUBLIC_IP=$(curl -s ifconfig.me 2>/dev/null || curl -s ipinfo.io/ip 2>/dev/null || echo "YOUR_SERVER_IP")
+        
+        echo -e ""
+        echo -e "${GREEN}✅ Chromium berhasil dijalankan!${NC}"
+        echo -e "${GREEN}===========================================${NC}"
+        echo -e "🌐 HTTP  : ${YELLOW}http://$PUBLIC_IP:$HTTP_PORT${NC}"
+        echo -e "🔒 HTTPS : ${YELLOW}https://$PUBLIC_IP:$HTTPS_PORT${NC}"
+        echo -e "👤 Username: ${YELLOW}$USERNAME${NC}"
+        echo -e "🔑 Password: ${YELLOW}[HIDDEN]${NC}"
+        echo -e "${GREEN}===========================================${NC}"
+        echo -e "${BLUE}💡 Tips:${NC}"
+        echo -e "   • Gunakan HTTPS untuk keamanan yang lebih baik"
+        echo -e "   • Jika HTTPS gagal, accept self-signed certificate"
+        echo -e "   • Container akan restart otomatis jika VPS reboot"
+        echo -e ""
+        echo -e "${BLUE}🔧 Management:${NC}"
+        echo -e "   • Stop: ${YELLOW}cd ~/chromium && docker-compose down${NC}"
+        echo -e "   • Start: ${YELLOW}cd ~/chromium && docker-compose up -d${NC}"
+        echo -e "   • Logs: ${YELLOW}docker logs chromium${NC}"
+    else
+        echo -e "${RED}❌ Gagal menjalankan Chromium container.${NC}"
+        echo -e "${YELLOW}Cek logs: docker logs chromium${NC}"
+        return 1
+    fi
 }
-
 
 # ========== Menu Utama ==========
 function main_menu() {
