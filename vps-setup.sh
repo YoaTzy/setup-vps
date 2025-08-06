@@ -189,10 +189,12 @@ function install_chromium_docker() {
     docker stop chromium 2>/dev/null || true
     docker rm chromium 2>/dev/null || true
 
+    # Hapus file compose lama jika ada
+    rm -f docker-compose.yaml docker-compose.yml
+
     echo -e "${BLUE}[INFO] Membuat konfigurasi Docker Compose...${NC}"
 
     cat <<EOF > docker-compose.yml
-version: '3.8'
 services:
   chromium:
     image: lscr.io/linuxserver/chromium:latest
@@ -214,10 +216,6 @@ services:
       - "$HTTPS_PORT:3001"
     shm_size: $SHM
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 2G
 EOF
 
     echo -e "${BLUE}[INFO] Menjalankan Chromium container...${NC}"
