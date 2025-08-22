@@ -62,18 +62,44 @@ function swap_manager() {
     read -p "Swappiness (0-100, default 80): " SWAPN
     SWAPN=${SWAPN:-80}
 
-    BYTES=$(echo $SIZE | awk '{if($1~/G/) {gsub("G","",$1); print $1*1024*1024*1024} else if($1~/M/) {gsub("M","",$1); print $1*1024*1024}}')
-
-    if [[ "$BYTES" -lt 134217728 ]]; then
-        echo -e "${RED}❌ Swap terlalu kecil.${NC}"
+    # Konversi ukuran ke bytes tanpa notasi ilmiah
+    if [[ "$SIZE" =~ ^[0-9]+[Gg]$ ]]; then
+        # Ukuran dalam GB
+        GB_SIZE=$(echo "$SIZE" | sed 's/[Gg]$//')
+        # 128MB dalam GB
+        MIN_GB=0.125
+        if (( $(echo "$GB_SIZE < $MIN_GB" | bc -l) )); then
+            echo -e "${RED}❌ Swap terlalu kecil. Minimal 128MB.${NC}"
+            return
+        fi
+        # Gunakan SIZE langsung untuk fallocate
+    elif [[ "$SIZE" =~ ^[0-9]+[Mm]$ ]]; then
+        # Ukuran dalam MB
+        MB_SIZE=$(echo "$SIZE" | sed 's/[Mm]$//')
+        if [ "$MB_SIZE" -lt 128 ]; then
+            echo -e "${RED}❌ Swap terlalu kecil. Minimal 128MB.${NC}"
+            return
+        fi
+        # Gunakan SIZE langsung untuk fallocate
+    else
+        echo -e "${RED}❌ Format ukuran tidak valid. Gunakan format seperti 2G atau 512M.${NC}"
         return
+    fi
+    
+    # Hitung bytes untuk dd fallback (tanpa notasi ilmiah)
+    if [[ "$SIZE" =~ ^[0-9]+[Gg]$ ]]; then
+        GB_SIZE=$(echo "$SIZE" | sed 's/[Gg]$//')
+        DD_COUNT=$(echo "$GB_SIZE * 1024" | bc)
+    else
+        MB_SIZE=$(echo "$SIZE" | sed 's/[Mm]$//')
+        DD_COUNT=$MB_SIZE
     fi
 
     swapoff -a
     rm -f /swapfile
     sed -i '/swap/d' /etc/fstab
 
-    fallocate -l "$SIZE" /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=$(($BYTES / 1024 / 1024))
+    fallocate -l "$SIZE" /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=$DD_COUNT
     chmod 600 /swapfile
     mkswap /swapfile
     swapon /swapfile
