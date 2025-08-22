@@ -1,7 +1,15 @@
 # 🚀 VPS Setup Assistant (All-in-One Script)
 
 Script bash interaktif untuk konfigurasi awal VPS berbasis Linux (Ubuntu/Debian).  
-Semua fitur ada dalam satu file — tanpa dependensi eksternal. Cocok untuk server AWS, DigitalOcean, Vultr, dan VPS lainnya.
+Semua fitur ada dalam satu file — tanpa dependensi eksternal. Cocok untuk server AWS, DigitalOcean, Vultr, Linode, dan VPS lainnya.
+
+## 💻 Persyaratan Sistem
+
+- Sistem Operasi: Ubuntu 18.04+ atau Debian 10+
+- Akses root atau sudo
+- Koneksi internet aktif
+- Minimal RAM: 512MB (rekomendasi: 1GB+)
+- Minimal Disk: 5GB free space
 
 ---
 
@@ -46,9 +54,39 @@ Semua fitur ada dalam satu file — tanpa dependensi eksternal. Cocok untuk serv
 
 ## 📦 Cara Instalasi & Penggunaan
 
-### 1. Unduh dan jalankan:
+### Metode 1: One-liner Command (Termudah)
+
+```bash
+bash <(curl -s https://raw.githubusercontent.com/YoaTzy/setup-vps/main/vps-setup.sh)
+```
+
+### Metode 2: Download & Jalankan
 
 ```bash
 wget https://raw.githubusercontent.com/YoaTzy/setup-vps/main/vps-setup.sh -O vps-setup.sh
 chmod +x vps-setup.sh
 sudo ./vps-setup.sh
+```
+
+### Metode 3: Clone Repository
+
+```bash
+git clone https://github.com/YoaTzy/setup-vps.git
+cd setup-vps
+chmod +x vps-setup.sh
+sudo ./vps-setup.sh
+```
+
+## 🔄 Update Script
+
+Untuk mendapatkan versi terbaru script, jalankan:
+
+```bash
+wget https://raw.githubusercontent.com/YoaTzy/setup-vps/main/vps-setup.sh -O vps-setup.sh --no-check-certificate
+chmod +x vps-setup.sh
+```
+
+## 🛠️ Troubleshooting
+
+- **Jika terjadi error "Permission denied"**: Pastikan script memiliki izin eksekusi dengan perintah `chmod +x vps-setup.sh`
+- **Jika terjadi error pada menu Swap**: Pastikan ukuran swap yang dimasukkan valid (contoh: 2G atau 512M)
